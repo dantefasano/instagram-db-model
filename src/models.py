@@ -9,22 +9,22 @@ from sqlalchemy_schemadisplay import create_schema_graph
 
 db = SQLAlchemy()
 
+# User table to store user data
 class User(db.Model):
-    id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
-    email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    password: Mapped[str] = mapped_column(nullable=False)
-    profile_picture: Mapped[str] = mapped_column(String(255), nullable=True)
-    bio: Mapped[str] = mapped_column(Text, nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __tablename__ = 'user'
     
-    # Relationships
-    posts = relationship("Post", back_populates="user", cascade="all, delete-orphan")
-    comments = relationship("Comment", back_populates="user", cascade="all, delete-orphan")
-    likes = relationship("Like", back_populates="user", cascade="all, delete-orphan")
-    followers = relationship("Follow", foreign_keys="Follow.followed_id", back_populates="followed")
-    following = relationship("Follow", foreign_keys="Follow.follower_id", back_populates="follower")
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(120), nullable=False)
+    profile_picture = db.Column(db.String(255), nullable=True)
+    bio = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # connect to other tables
+    posts = db.relationship('Post', backref='user', lazy=True)
+    comments = db.relationship('Comment', backref='user', lazy=True)
+    likes = db.relationship('Like', backref='user', lazy=True)
 
     def serialize(self):
         return {
@@ -33,21 +33,22 @@ class User(db.Model):
             "email": self.email,
             "profile_picture": self.profile_picture,
             "bio": self.bio,
-            "created_at": self.created_at.isoformat(),
-            # do not serialize the password, its a security breach
+            "created_at": self.created_at.isoformat()
         }
 
+# Posts table
 class Post(db.Model):
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    image_url: Mapped[str] = mapped_column(String(255), nullable=False)
-    caption: Mapped[str] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __tablename__ = 'post'
     
-    # Relationships
-    user = relationship("User", back_populates="posts")
-    comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
-    likes = relationship("Like", back_populates="post", cascade="all, delete-orphan")
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    image_url = db.Column(db.String(255), nullable=False)
+    caption = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # connect to comments and likes
+    comments = db.relationship('Comment', backref='post', lazy=True)
+    likes = db.relationship('Like', backref='post', lazy=True)
 
     def serialize(self):
         return {
@@ -61,16 +62,15 @@ class Post(db.Model):
             "likes_count": len(self.likes)
         }
 
+# Comments table
 class Comment(db.Model):
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __tablename__ = 'comment'
     
-    # Relationships
-    user = relationship("User", back_populates="comments")
-    post = relationship("Post", back_populates="comments")
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def serialize(self):
         return {
@@ -82,15 +82,14 @@ class Comment(db.Model):
             "user": self.user.serialize()
         }
 
+# Likes table
 class Like(db.Model):
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __tablename__ = 'like'
     
-    # Relationships
-    user = relationship("User", back_populates="likes")
-    post = relationship("Post", back_populates="likes")
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def serialize(self):
         return {
@@ -119,60 +118,66 @@ class Follow(db.Model):
         }
 
 def generate_diagram():
-    # Get the absolute path for the output file
-    diagram_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'diagram.txt')
-    
-    # Create the diagram content
-    diagram_content = """# 1. Entities
-# 2. Properties
-# 3. Relationships
+    # make diagram
+    diagram = """
+Instagram DB Model
+================
 
 User
--
-id integer PK
-username string unique
-email string unique
-password string
-profile_picture string
-bio text
-is_active boolean
-created_at datetime
+----
+id (PK)
+username (unique)
+email (unique)
+password
+profile_picture
+bio
+created_at
 
 Post
--
-id integer PK
-user_id integer FK >- User.id
-image_url string
-caption text
-created_at datetime
+----
+id (PK)
+user_id (FK -> User)
+image_url
+caption
+created_at
 
 Comment
--
-id integer PK
-user_id integer FK >- User.id
-post_id integer FK >- Post.id
-content text
-created_at datetime
+-------
+id (PK)
+user_id (FK -> User)
+post_id (FK -> Post)
+content
+created_at
 
 Like
--
-id integer PK
-user_id integer FK >- User.id
-post_id integer FK >- Post.id
-created_at datetime
-
-Follow
--
-id integer PK
-follower_id integer FK >- User.id
-followed_id integer FK >- User.id
-created_at datetime
+----
+id (PK)
+user_id (FK -> User)
+post_id (FK -> Post)
+created_at
 """
     
-    # Write the diagram to a file
-    with open(diagram_path, 'w') as f:
-        f.write(diagram_content)
-    print(f"Diagram generated successfully at: {diagram_path}")
+    # save text diagram
+    with open('diagram.txt', 'w') as f:
+        f.write(diagram)
+    
+    # make png diagram
+    engine = create_engine('sqlite:///instagram.db')
+    
+    # create all tables
+    db.metadata.create_all(engine)
+    
+    # make the diagram
+    graph = create_schema_graph(
+        engine,
+        metadata=db.metadata,
+        show_datatypes=True,
+        show_indexes=True,
+        rankdir='LR',
+        concentrate=False
+    )
+    graph.write_png('diagram.png')
+    print("done!")
 
 if __name__ == '__main__':
     generate_diagram()
